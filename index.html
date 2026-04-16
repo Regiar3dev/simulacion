@@ -343,6 +343,87 @@
         }
         return result;
     }
+    // Escala hiperbolica
+    class AsinhScale extends Chart.Scale {
+    parse(raw) { return parseFloat(raw); }
+
+    determineDataLimits() {
+        const { min, max } = this.getMinMax(true);
+        this.min = min;
+        this.max = max;
+    }
+
+    buildTicks() {
+        return [-1000,-100,-10,-1,0,1,10,100,1000]
+        .filter(v => v >= this.min && v <= this.max)
+        .map(value => ({ value }));
+    }
+
+    getPixelForValue(value) {
+        const range = Math.asinh(this.max) - Math.asinh(this.min);
+        const ratio = (Math.asinh(value) - Math.asinh(this.min)) / range;
+        return this.left + ratio * this.width;
+    }
+
+    getValueForPixel(pixel) {
+        const ratio = (pixel - this.left) / this.width;
+        return Math.sinh(Math.asinh(this.min) + ratio * (Math.asinh(this.max) - Math.asinh(this.min)));
+    }
+    }
+
+    AsinhScale.id = 'asinh';
+    AsinhScale.defaults = { position: 'bottom' };
+
+    Chart.register(AsinhScale);
+
+    // Escala Exponencial
+    class ExpScale extends Chart.Scale {
+        parse(raw) { return parseFloat(raw); }
+
+        determineDataLimits() {
+            const { min, max } = this.getMinMax(true);
+            this.min = Math.max(min, 0.01); // no acepta 0 ni negativos
+            this.max = max;
+        }
+
+        buildTicks() {
+            const ticks = [];
+            const minExp = Math.floor(Math.log10(this.min));
+            const maxExp = Math.ceil(Math.log10(this.max));
+            for (let e = minExp; e <= maxExp; e++) {
+                ticks.push({ value: Math.pow(10, e) });
+            }
+            return ticks;
+        }
+
+        getPixelForValue(value) {
+            if (value <= 0) value = 0.01;
+            const logMin = Math.log10(this.min);
+            const logMax = Math.log10(this.max);
+            const ratio = (Math.log10(value) - logMin) / (logMax - logMin);
+            return this.isHorizontal()
+                ? this.left + ratio * this.width
+                : this.bottom - ratio * this.height;
+        }
+
+        getValueForPixel(pixel) {
+            const logMin = Math.log10(this.min);
+            const logMax = Math.log10(this.max);
+            const ratio = this.isHorizontal()
+                ? (pixel - this.left) / this.width
+                : (this.bottom - pixel) / this.height;
+            return Math.pow(10, logMin + ratio * (logMax - logMin));
+        }
+
+        getLabelForValue(value) {
+            const exp = Math.round(Math.log10(value));
+            return `10^${exp}`;
+        }
+    }
+
+    ExpScale.id = 'exp';
+    ExpScale.defaults = {};
+    Chart.register(ExpScale);
 
     function updateCharts(results) {
         const binSizeSkill = 20;
@@ -365,10 +446,9 @@
                 maintainAspectRatio: false,
                 plugins: { title: { display: true, text: 'Balance vs Wait Time (Individual Matches)' } },
                 scales: { 
-                    x: { title: { display: true, text: 'Wait Time (ticks)' } }, 
-                    y: { title: { display: true, text: 'Skill Difference (max-min)' } } 
+                    x: { title: { display: true, text: 'Wait Time (ticks)'}, type:"asinh", min:0, max:100 } },
+                    y: { title: { display: true, text: 'Skill Difference (max-min)' } }
                 }
-            }
         });
 
         // --- Boxplot: Skill Difference ---
@@ -413,7 +493,7 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { title: { display: true, text: 'Wait Time per Match (Boxplot)' }, legend: { display: false } },
-                scales: { y: { title: { display: true, text: 'Wait Time (ticks)' } } }
+                scales: { y: { title: { display: true, text: 'Wait Time (ticks)' }, type: "exp" } }
             }
         });
 
@@ -476,7 +556,7 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { title: { display: true, text: 'Match Count by Skill Gap (Density)' } },
-                scales: { x: { title: { display: true, text: 'Skill Gap (max - min)' } }, y: { title: { display: true, text: 'Density' } } }
+                scales: { x: { title: { display: true, text: 'Skill Gap (max - min)' }, type: "asinh", min: 10}, y: { title: { display: true, text: 'Density' } } }
             }
         });
 
@@ -504,7 +584,7 @@
                 maintainAspectRatio: false,
                 plugins: { title: { display: true, text: 'Match Count by Wait Time (Density)' } },
                 scales: { 
-                    x: { title: { display: true, text: 'Wait Time (ticks)' } }, 
+                    x: { title: { display: true, text: 'Wait Time (ticks)' }, type: "asinh" },
                     y: { title: { display: true, text: 'Density' } } 
                 }
             }
